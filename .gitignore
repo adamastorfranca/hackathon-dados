@@ -1,24 +1,36 @@
-# Compiled class file
-*.class
+# Dados gerados pelo pipeline
+/data/raw/*
+/data/bronze/*
+/data/silver/*
+/data/gold/*
 
-# Log file
-*.log
+# Ambientes virtuais
+.venv/
+venv/
+env/
+*env/
 
-# BlueJ files
-*.ctxt
+# Segredos e credenciais
+.env
+*.env
+credentials.json
+secrets.toml
+*.pem
+*.key
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+# Cache e artefatos do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+# Arquivos de IDE
+.vscode/
+.idea/
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# Arquivos de Sistema Operacional
+.DS_Store
+Thumbs.db
