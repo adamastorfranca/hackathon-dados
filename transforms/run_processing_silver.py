@@ -19,8 +19,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
 import time
-import re
-from typing import Dict
 
 # --- Configuração ---
 
@@ -102,12 +100,13 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
     #
     logging.info("Criando timestamp e ajustando timezone...")
     try:
-        # Converte 'hora_utc' (ex: 1200) para string formatada (ex: '1200')
-        # Trata o caso de 2400 (meia-noite) que o INMET usa
-        df['hora_utc'] = pd.to_numeric(df['hora_utc'], errors='coerce').fillna(0).astype(int).astype(str).str.pad(4, 'left', '0')
+        # Limpa a coluna 'hora_utc': remove " UTC" e preenche com zeros à esquerda.
+        # Ex: '0 UTC' -> '0000', '100 UTC' -> '0100'
+        df['hora_utc'] = df['hora_utc'].astype(str).str.replace(' UTC', '', regex=False).str.zfill(4)
+
         
         # Trata o caso de 2400 (meia-noite) que o INMET usa
-        df['hora_utc'] = df['hora_utc'].str.replace('2400', '0000', regex=False)
+        df.loc[df['hora_utc'] == '2400', 'hora_utc'] = '0000'
         
         # Combina data e hora
         timestamp_str = df['data'].astype(str) + ' ' + df['hora_utc']
