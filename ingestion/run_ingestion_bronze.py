@@ -37,7 +37,7 @@ logging.basicConfig(
 BASE_URL = "https://portal.inmet.gov.br/uploads/dadoshistoricos/{year}.zip"
 CURRENT_YEAR = date.today().year
 YEARS_TO_PROCESS = range(CURRENT_YEAR - 4, CURRENT_YEAR + 1)
-FILE_FILTER_KEY = "_A320_"  # Filtro para arquivos de João Pessoa (PB)
+FILE_FILTER_KEY = "_NE_PB_"  # Filtro para arquivos da Paraíba
 MAX_WORKERS = 5            # Limita o paralelismo para não sobrecarregar a fonte
 
 # Define o caminho base do projeto
@@ -86,12 +86,22 @@ def stream_filtered_files_from_zip(
 
 def process_csv_stream(file_stream: io.TextIOWrapper, file_name: str) -> pd.DataFrame:
     """
-    Processa um stream de arquivo CSV, pulando metadados e lendo os dados.
+    Processa um stream de arquivo CSV, extraindo metadados (Município)
+    antes de ler os dados principais.
     """
+    municipio = "NAO_EXTRAIDO" # Define um valor padrão
     try:
-        # 1. Pular linhas de metadados para posicionar o stream no cabeçalho
-        for _ in range(METADATA_ROWS_TO_SKIP):
-            file_stream.readline()
+        # 1. Ler e processar o cabeçalho de metadados linha por linha
+        for i in range(METADATA_ROWS_TO_SKIP):
+            line = file_stream.readline()
+            
+            # A 3ª linha (índice 2) contém o município
+            if i == 2:
+                try:
+                    # Tenta extrair o valor após "Município:"
+                    municipio = line.split(':')[1].strip().lstrip(';')
+                except Exception as e:
+                    logging.warning(f"Não foi possível extrair município da linha: '{line}' em {file_name}")
 
         # 2. Ler os dados principais
         # O stream agora está posicionado na linha do cabeçalho dos dados
@@ -107,7 +117,11 @@ def process_csv_stream(file_stream: io.TextIOWrapper, file_name: str) -> pd.Data
         if unnamed_cols:
             df.drop(columns=unnamed_cols, inplace=True, errors='ignore')
         
-        logging.debug(f"Processado {file_name} em DataFrame. Linhas: {len(df)}")
+        # 4. Adicionar o metadado extraído ao DataFrame
+        if not df.empty:
+            df['municipio'] = municipio
+        
+        logging.debug(f"Processado {file_name} (Município: {municipio}). Linhas: {len(df)}")
         return df
 
     except Exception as e:
