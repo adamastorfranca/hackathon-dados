@@ -131,7 +131,7 @@ def write_gold_dataset(df: pd.DataFrame, base_path: Path):
 
 # --- Orquestração ---
 
-def main():
+def main_gold():
     """Orquestra a transformação Silver -> Gold."""
     pipeline_start_time = time.time()
     logging.info("--- Iniciando pipeline de transformação (Silver -> Gold) ---")
@@ -158,4 +158,4 @@ def main():
         logging.info(f"Tempo total de execução: {pipeline_duration:.2f} segundos")
 
 if __name__ == "__main__":
-    main()
+    main_gold()

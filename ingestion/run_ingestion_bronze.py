@@ -212,7 +212,7 @@ def process_year(year: int, session: requests.Session) -> int:
     return len(year_df)
 
 
-def main():
+def main_bronze():
     """
     Função principal de orquestração do pipeline de ingestão.
     """
@@ -258,4 +258,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main_bronze()

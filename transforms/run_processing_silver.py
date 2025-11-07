@@ -227,7 +227,7 @@ def write_silver_dataset(
         logging.error(f"Falha ao escrever o dataset Parquet Silver: {e}", exc_info=True)
 
 
-def main():
+def main_silver():
     """
     Função principal de orquestração do pipeline (Bronze -> Silver).
     """
@@ -262,4 +262,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main_silver()
