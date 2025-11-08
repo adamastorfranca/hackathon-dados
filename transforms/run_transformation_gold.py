@@ -206,7 +206,7 @@ def write_gold_dataset(df: pd.DataFrame, base_path: Path):
             table,
             root_path=base_path,
             partition_cols=partition_cols,
-            existing_data_behavior='overwrite_or_ignore'
+            existing_data_behavior='delete_matching'
         )
         logging.info("Escrita da camada Gold concluída com sucesso.")
     

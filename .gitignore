@@ -1,5 +1,4 @@
 # Dados gerados pelo pipeline
-/data/raw/*
 /data/bronze/*
 /data/silver/*
 /data/gold/*
