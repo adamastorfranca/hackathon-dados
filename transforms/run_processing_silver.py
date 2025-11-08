@@ -66,8 +66,6 @@ def load_bronze_dataset(bronze_path: Path) -> pd.DataFrame:
     """
     logging.info(f"Iniciando leitura do dataset Bronze em: {bronze_path}")
     try:
-        # CORREÇÃO: O argumento 'use_pandas_metadata' foi removido
-        # pois não é mais suportado nesta versão do pyarrow.
         table = pq.read_table(bronze_path)
         df = table.to_pandas()
         
