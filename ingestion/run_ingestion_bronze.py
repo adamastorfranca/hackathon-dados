@@ -4,7 +4,7 @@ Script de Ingestão (Raw -> Bronze) para Dados Climáticos do INMET.
 Responsabilidades:
 1. Baixar arquivos ZIP de dados climáticos (últimos 5 anos) em paralelo.
 2. Ler os ZIPs em memória, sem descompactar em disco.
-3. Filtrar arquivos CSV de interesse (ex: '_A320_').
+3. Filtrar arquivos CSV de interesse (ex: '_NE_PB_').
 4. Processar os CSVs em streams:
    - Pular metadados (cabeçalho).
    - Ler dados principais com delimitador (';'), decimal (',') e encoding ('latin-1').
@@ -48,7 +48,7 @@ BRONZE_DATALAKE_PATH = PROJECT_ROOT / "data" / "bronze" / "inmet_climate_data"
 FILE_ENCODING = 'latin-1'
 FILE_DELIMITER = ';'
 DECIMAL_SEPARATOR = ','
-METADATA_ROWS_TO_SKIP = 8  # Linhas de cabeçalho (metadados) a serem puladas
+METADATA_ROWS_TO_SKIP = 8  # Linhas de cabeçalho (metadados)
 
 
 def download_zip_file(session: requests.Session, url: str) -> Optional[io.BytesIO]:
@@ -58,7 +58,7 @@ def download_zip_file(session: requests.Session, url: str) -> Optional[io.BytesI
     """
     try:
         response = session.get(url)
-        response.raise_for_status()  # Lança exceção para status HTTP 4xx/5xx
+        response.raise_for_status()
         logging.info(f"Sucesso no download de: {url}")
         return io.BytesIO(response.content)
     except requests.exceptions.RequestException as e:
@@ -92,16 +92,33 @@ def process_csv_stream(file_stream: io.TextIOWrapper, file_name: str) -> pd.Data
     municipio = "NAO_EXTRAIDO" # Define um valor padrão
     try:
         # 1. Ler e processar o cabeçalho de metadados linha por linha
+        metadata_lines = []
         for i in range(METADATA_ROWS_TO_SKIP):
             line = file_stream.readline()
-            
-            # A 3ª linha (índice 2) contém o município
-            if i == 2:
-                try:
-                    # Tenta extrair o valor após "Município:"
-                    municipio = line.split(':')[1].strip().lstrip(';')
-                except Exception as e:
-                    logging.warning(f"Não foi possível extrair município da linha: '{line}' em {file_name}")
+            metadata_lines.append(line)
+
+        # Tenta extrair município/estação de maneira robusta:
+        for meta_line in metadata_lines:
+            if not meta_line:
+                continue
+            low = meta_line.lower()
+            if 'municipio' in low or 'município' in low or 'estacao' in low or 'estação' in low:
+                # Aceita separadores ':' ou ';' (alguns arquivos usam "CHAVE:;VALOR" ou "CHAVE: VALOR")
+                # Extrai o texto após o último separador relevante
+                if ':' in meta_line:
+                    parts = meta_line.split(':', 1)
+                    candidate = parts[1]
+                elif ';' in meta_line:
+                    parts = meta_line.split(';')
+                    # pega último token não vazio
+                    candidate = next((p for p in reversed(parts) if p.strip()), "")
+                else:
+                    candidate = meta_line
+
+                municipio = candidate.strip().strip(';').strip()
+                # Remove eventuais labels remanescentes (ex: "Município: JOAO PESSOA;")
+                if municipio:
+                    break
 
         # 2. Ler os dados principais
         # O stream agora está posicionado na linha do cabeçalho dos dados
@@ -153,11 +170,7 @@ def write_bronze_dataset(
             table,
             root_path=base_path,
             partition_cols=partition_cols,
-            # CORREÇÃO AQUI: 
-            # 'delete_matching' garante que, se a partição (ano) existir, 
-            # ela será atomicamente substituída.
             existing_data_behavior='delete_matching'
-            # 'use_legacy_dataset' foi removido para suprimir o warning
         )
         logging.info(f"Escrita em {base_path} concluída com sucesso.")
     
