@@ -176,6 +176,3 @@ def test_full_pipeline_integration():
     with requests.Session() as session:
         records = process_year(2025, session)
         assert records > 0
-
-if __name__ == '__main__':
-    pytest.main([__file__])

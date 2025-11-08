@@ -96,7 +96,31 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
     expected_cols = [col for col in COLUMN_RENAME_MAP.values() if col in df.columns]
     df = df[expected_cols]
 
-    # 2. Converter tipos de dados (datas para timestamp)
+    # 2. Tratar valores faltantes e inválidos (Tipos Numéricos) - MOVIDO PARA CIMA
+    #
+    logging.info("Convertendo tipos numéricos e aplicando regras de qualidade...")
+    
+    numeric_cols = [
+        'precipitacao_total_horario_mm', 'pressao_atm_estacao_horaria_mb',
+        'pressao_atm_max_hora_ant_mb', 'pressao_atm_min_hora_ant_mb',
+        'radiacao_global_kj_m2', 'temperatura_ar_bulbo_seco_horaria_c',
+        'temperatura_ponto_orvalho_c', 'temperatura_max_hora_ant_c',
+        'temperatura_min_hora_ant_c', 'temperatura_orvalho_max_hora_ant_c',
+        'temperatura_orvalho_min_hora_ant_c', 'umidade_rel_max_hora_ant_percent',
+        'umidade_rel_min_hora_ant_percent', 'umidade_relativa_ar_horaria_percent',
+        'vento_direcao_horaria_gr', 'vento_rajada_maxima_ms',
+        'vento_velocidade_horaria_ms'
+    ]
+
+    for col in numeric_cols:
+        if col in df.columns:
+            # Substitui vírgula por ponto ANTES de converter para numérico
+            if df[col].dtype == 'object':
+                df[col] = df[col].str.replace(',', '.', regex=False)
+            # Força a conversão para numérico. Valores inválidos (ex: '---') viram NaT
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # 3. Converter tipos de dados (datas para timestamp)
     #
     logging.info("Criando timestamp e ajustando timezone...")
     try:
@@ -104,10 +128,6 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
         # Ex: '0 UTC' -> '0000', '100 UTC' -> '0100'
         df['hora_utc'] = df['hora_utc'].astype(str).str.replace(' UTC', '', regex=False).str.zfill(4)
 
-        
-        # Trata o caso de 2400 (meia-noite) que o INMET usa
-        df.loc[df['hora_utc'] == '2400', 'hora_utc'] = '0000'
-        
         # Combina data e hora
         timestamp_str = df['data'].astype(str) + ' ' + df['hora_utc']
         
@@ -138,27 +158,6 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
         # Se a conversão de tempo falhar, é um erro crítico
         raise
 
-    # 3. Tratar valores faltantes e inválidos (Tipos Numéricos)
-    #
-    logging.info("Convertendo tipos numéricos e aplicando regras de qualidade...")
-    
-    numeric_cols = [
-        'precipitacao_total_horario_mm', 'pressao_atm_estacao_horaria_mb',
-        'pressao_atm_max_hora_ant_mb', 'pressao_atm_min_hora_ant_mb',
-        'radiacao_global_kj_m2', 'temperatura_ar_bulbo_seco_horaria_c',
-        'temperatura_ponto_orvalho_c', 'temperatura_max_hora_ant_c',
-        'temperatura_min_hora_ant_c', 'temperatura_orvalho_max_hora_ant_c',
-        'temperatura_orvalho_min_hora_ant_c', 'umidade_rel_max_hora_ant_percent',
-        'umidade_rel_min_hora_ant_percent', 'umidade_relativa_ar_horaria_percent',
-        'vento_direcao_horaria_gr', 'vento_rajada_maxima_ms',
-        'vento_velocidade_horaria_ms'
-    ]
-
-    for col in numeric_cols:
-        if col in df.columns:
-            # Força a conversão para numérico. Valores inválidos (ex: '---') viram NaT
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
     # Aplica regras de qualidade (Data Quality)
     #
     if 'umidade_relativa_ar_horaria_percent' in df.columns:
@@ -171,7 +170,19 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
         # Define temperaturas fora de um range plausível (-20 a 50 C) como Nulas
         df.loc[~df[t_col].between(-20, 50), t_col] = pd.NA
 
-    # 4. Deduplicar registros
+    # 4. Remover linhas sem dados de medição
+    #
+    logging.info("Removendo registros que não possuem nenhum dado de medição válido...")
+    original_count_metrics = len(df)
+    # Filtra a lista de colunas numéricas para incluir apenas as que existem no DataFrame atual
+    actual_numeric_cols = [col for col in numeric_cols if col in df.columns]
+    # Mantém apenas as linhas que têm pelo menos um valor não-nulo nas colunas numéricas
+    df.dropna(subset=actual_numeric_cols, how='all', inplace=True)
+    dropped_count_metrics = original_count_metrics - len(df)
+    if dropped_count_metrics > 0:
+        logging.info(f"Removidos {dropped_count_metrics} registros por não conterem dados de medição.")
+
+    # 5. Deduplicar registros
     #
     logging.info("Removendo registros duplicados...")
     # Chave de negócio: um registro é único pela estação (source_file) e pelo timestamp
@@ -183,7 +194,7 @@ def process_bronze_to_silver(df: pd.DataFrame) -> pd.DataFrame:
     )
     logging.info(f"Removidas {original_count - len(df)} duplicatas.")
 
-    # 5. Adicionar colunas de partição e selecionar colunas finais
+    # 6. Adicionar colunas de partição e selecionar colunas finais
     logging.info("Adicionando colunas de partição para a camada Silver...")
     df['partition_year'] = df['timestamp_utc'].dt.year
     df['partition_month'] = df['timestamp_utc'].dt.month
